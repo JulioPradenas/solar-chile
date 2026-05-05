@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar Chile — Resultado</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>Resultado — {{ result.city }}</h1>
+
+        <div class="result-grid">
+            <div class="card">
+                <span class="label">Produccion anual estimada</span>
+                <span class="value">{{ "{:,.0f}".format(result.annual_energy_kwh) }} kWh/año</span>
+            </div>
+            <div class="card">
+                <span class="label">Costo de instalacion estimado</span>
+                <span class="value">$ {{ "{:,.0f}".format(result.install_cost_clp) }} CLP</span>
+            </div>
+            <div class="card">
+                <span class="label">Ahorro anual (año 1)</span>
+                <span class="value">$ {{ "{:,.0f}".format(result.annual_savings_clp) }} CLP</span>
+            </div>
+            <div class="card">
+                <span class="label">Ahorro acumulado 10 años</span>
+                <span class="value">$ {{ "{:,.0f}".format(result.savings_10y_clp) }} CLP</span>
+            </div>
+            <div class="card">
+                <span class="label">Periodo de retorno</span>
+                <span class="value">
+                    {% if result.payback_years %}
+                        {{ result.payback_years }} años
+                    {% else %}
+                        > 10 años
+                    {% endif %}
+                </span>
+            </div>
+            <div class="card">
+                <span class="label">Angulo optimo recomendado</span>
+                <span class="value">{{ result.optimal_tilt_deg }}°</span>
+            </div>
+        </div>
+
+        <a href="/" class="back-link">Calcular otra instalacion</a>
+    </div>
+</body>
+</html>

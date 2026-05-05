@@ -1,0 +1,6 @@
+notebooks/
+__pycache__/
+*.pyc
+.claude/
+.git/
+*.ipynb_checkpoints/
