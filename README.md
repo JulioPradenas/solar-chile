@@ -62,15 +62,16 @@ NREL PVWatts API v8  (dataset=intl, South America)
 
 ## Resultados del modelo
 
-Se evaluaron tres algoritmos con 5-fold cross-validation. El conjunto de entrenamiento tiene 2,400 filas y el de prueba 600.
+Se evaluaron tres algoritmos con 5-fold cross-validation, y el mejor se tuneó con Optuna (30 trials de búsqueda bayesiana). El conjunto de entrenamiento tiene 2,400 filas y el de prueba 600.
 
-| Modelo              | R²         | RMSE (kWh/año) |
-|---------------------|------------|----------------|
-| Regresión Lineal    | 0.9753     | 810.5          |
-| Random Forest       | 0.9936     | 411.1          |
-| **Gradient Boosting** | **0.9984** | **204.9**   |
+| Modelo                     | R²         | RMSE (kWh/año) |
+|----------------------------|------------|----------------|
+| Regresión Lineal           | 0.9753     | 810.5          |
+| Random Forest              | 0.9936     | 411.1          |
+| GBM (GridSearchCV)         | 0.9984     | 204.9          |
+| **GBM (Optuna 30 trials)** | **0.9992** | **147.7**      |
 
-El error de 204 kWh/año equivale al ~2% de la producción típica de un sistema de 5 kWp en Santiago (7,300 kWh/año), margen aceptable para estimaciones residenciales.
+El error final de 148 kWh/año equivale al ~2% de la producción típica de un sistema de 5 kWp en Santiago (7,300 kWh/año). Optuna redujo el RMSE un 28% adicional respecto al GridSearchCV.
 
 ---
 

@@ -2,7 +2,8 @@
   "models": [
     {"name": "Regresión Lineal",  "r2": 0.9753, "rmse": 810.5, "winner": false},
     {"name": "Random Forest",     "r2": 0.9936, "rmse": 411.1, "winner": false},
-    {"name": "Gradient Boosting", "r2": 0.9984, "rmse": 204.9, "winner": true}
+    {"name": "GBM (GridSearchCV)","r2": 0.9984, "rmse": 204.9, "winner": false},
+    {"name": "GBM (Optuna 30 trials)", "r2": 0.9992, "rmse": 147.7, "winner": true}
   ],
   "feature_importances": {
     "system_size_kw":    0.9072,
