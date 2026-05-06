@@ -5,6 +5,9 @@
 ![Flask](https://img.shields.io/badge/Flask-2.x-lightgrey)
 ![Fuente de datos](https://img.shields.io/badge/Datos-NREL%20PVWatts%20v8-green)
 
+**[Calculadora Flask](http://localhost:8080)** · **[Dashboard Streamlit](http://localhost:8501)**
+_(clonar el repo y correr `python app/server.py` / `streamlit run app/streamlit_app.py`)_
+
 Calculadora de producción solar fotovoltaica para instalaciones residenciales en Chile. Combina datos reales de irradiancia del API de NREL con un modelo de Gradient Boosting para estimar generación anual, ahorro en la cuenta de la luz y período de recuperación de la inversión.
 
 ---
