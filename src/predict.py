@@ -13,7 +13,6 @@ from pathlib import Path
 import pandas as pd
 
 from src.config import (
-    CHILE_CITIES_LIST,
     ELECTRICITY_RATE_CLP,
     RATE_ESCALATION,
     INSTALL_COST_PER_KWP,
