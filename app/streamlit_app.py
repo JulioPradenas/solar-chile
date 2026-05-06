@@ -87,18 +87,22 @@ def load_model_results():
 def load_residuals():
     global DEMO_MODE
     pkl = Path("src/models/gb_energy_model.pkl")
-    if pkl.exists():
+    features_json = Path("data/selected_features.json")
+    if pkl.exists() and features_json.exists():
         df = load_dataset()
-        features = ["system_size_kw", "tilt", "azimuth", "losses",
-                    "tilt_deviation", "azimuth_deviation", "latitude", "solrad_annual"]
-        if all(c in df.columns for c in features):
-            X = df[features]
-            y = df["ac_annual"]
-            _, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
-            with open(pkl, "rb") as f:
-                model = pickle.load(f)
-            y_pred = model.predict(X_test)
-            return pd.DataFrame({"real": y_test.values, "predicho": y_pred})
+        if "ac_annual" in df.columns:
+            from src.features.engineering import create_features
+            df_enriched = create_features(df)
+            with open(features_json) as f:
+                selected = json.load(f)
+            if all(c in df_enriched.columns for c in selected):
+                X = df_enriched[selected]
+                y = df["ac_annual"]
+                _, X_test, _, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+                with open(pkl, "rb") as f:
+                    model = pickle.load(f)
+                y_pred = model.predict(X_test)
+                return pd.DataFrame({"real": y_test.values, "predicho": y_pred})
     DEMO_MODE = True
     rng = np.random.default_rng(42)
     real = rng.uniform(2000, 28000, 600)
