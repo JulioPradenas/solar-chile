@@ -6,3 +6,12 @@ services:
     volumes:
       - ./data:/app/data
       - ./src/models:/app/src/models
+
+  streamlit:
+    build: .
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./data:/app/data
+      - ./src/models:/app/src/models
+    command: streamlit run app/streamlit_app.py --server.port=8501 --server.address=0.0.0.0

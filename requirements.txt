@@ -6,3 +6,5 @@ seaborn>=0.12
 requests>=2.31
 flask>=2.2,<3.0
 jupyter>=1.0
+streamlit>=1.32
+plotly>=5.18
