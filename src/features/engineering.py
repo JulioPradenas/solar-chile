@@ -101,6 +101,64 @@ def create_features(df: pd.DataFrame) -> pd.DataFrame:
     return out
 
 
+def select_features(
+    df: pd.DataFrame,
+    exclude_cols: list | None = None,
+    corr_threshold: float = 0.95,
+    variance_ratio: float = 0.01,
+) -> tuple[list, pd.DataFrame]:
+    """
+    Filtra features redundantes o de baja varianza del DataFrame enriquecido.
+
+    Parámetros:
+        exclude_cols    Columnas a ignorar en la selección (target, IDs, categorías).
+        corr_threshold  Umbral de correlación. Si |r| > umbral entre dos features,
+                        se elimina la segunda (se conserva la más temprana en el df).
+        variance_ratio  Se elimina cualquier feature con varianza menor a
+                        variance_ratio × varianza_promedio del conjunto.
+
+    Retorna:
+        (selected_names, filtered_df) donde filtered_df incluye selected + exclude_cols.
+    """
+    if exclude_cols is None:
+        exclude_cols = []
+
+    numeric = df.select_dtypes(include="number").drop(columns=exclude_cols, errors="ignore")
+    dropped: dict[str, str] = {}
+
+    # Paso 1: eliminar features de baja varianza (escala-independiente).
+    # Se usa el coeficiente de variación al cuadrado (CV² = var/mean²) para comparar
+    # features en distintas escalas. Features con mean ≈ 0 se evalúan por varianza absoluta.
+    variances = numeric.var()
+    means_sq = numeric.mean().abs() ** 2
+    cv2 = variances / means_sq.clip(lower=variances * 0.01)  # fallback si mean ≈ 0
+    low_var = cv2[cv2 < variance_ratio].index.tolist()
+    for col in low_var:
+        dropped[col] = f"CV²={cv2[col]:.5f} < umbral {variance_ratio}"
+    numeric = numeric.drop(columns=low_var)
+
+    # Paso 2: eliminar alta correlación (triángulo superior, conservar primera aparición)
+    corr = numeric.corr().abs()
+    upper = corr.where(np.triu(np.ones(corr.shape), k=1).astype(bool))
+    high_corr_cols = [col for col in upper.columns if any(upper[col] > corr_threshold)]
+    for col in high_corr_cols:
+        correlated_with = upper.index[upper[col] > corr_threshold].tolist()
+        dropped[col] = f"correlación > {corr_threshold} con {correlated_with}"
+    numeric = numeric.drop(columns=high_corr_cols)
+
+    selected = numeric.columns.tolist()
+
+    n_original = len(df.select_dtypes("number").columns)
+    print(f"Features numéricas originales : {n_original}")
+    print(f"Features seleccionadas         : {len(selected)}")
+    print(f"Eliminadas ({len(dropped)}):")
+    for col, reason in dropped.items():
+        print(f"  ✗ {col}: {reason}")
+
+    keep_cols = [c for c in selected + exclude_cols if c in df.columns]
+    return selected, df[keep_cols]
+
+
 if __name__ == "__main__":
     import sys
     from pathlib import Path
@@ -123,3 +181,12 @@ if __name__ == "__main__":
 
     df_out.to_csv(output_path, index=False)
     print(f"\nGuardado → {output_path}")
+
+    print("\n── Selección de features ──────────────────────────────")
+    selected, df_selected = select_features(
+        df_out,
+        exclude_cols=["city", "region", "ac_annual"],
+    )
+    print(f"\nFeatures finales para modelado ({len(selected)}):")
+    for f in selected:
+        print(f"  {f}")
