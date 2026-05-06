@@ -44,34 +44,57 @@ NREL PVWatts API v8  (dataset=intl, South America)
     02_features.ipynb
     ├── tilt_deviation   = tilt − |latitud|
     ├── azimuth_deviation = desviación desde norte verdadero
-    └── solar_chile_model.csv  (3,000 × 13 features)
+    └── solar_chile_model.csv  (3,000 × 11 features)
           │
           ▼
-    03_modeling.ipynb
-    └── GridSearchCV: LinearRegression / RandomForest / GradientBoosting
+    src/features/engineering.py
+    ├── create_features()  →  +11 features físicas (20 columnas totales)
+    └── select_features()  →  10 features no-redundantes (CV² + correlación)
           │
           ▼
-    src/models/gb_energy_model.pkl
+    src/train.py  (MLflow tracking + Optuna 30 trials)
+          │
+          ▼
+    src/models/gb_energy_model.pkl  +  data/selected_features.json
           │
           ├──► src/predict.py  →  estimación + cálculo financiero
           │
-          └──► app/server.py   →  http://localhost:8080
+          ├──► app/server.py   →  http://localhost:8080
+          │
+          └──► app/streamlit_app.py  →  http://localhost:8501
 ```
+
+---
+
+## Exploración de datos
+
+Dataset de entrenamiento: **3,000 instalaciones × 11 columnas**, sin valores nulos.
+Generado sintéticamente con PVWatts para 6 ciudades (500 instalaciones por ciudad),
+con variación realista en tilt y azimuth (distribución normal centrada en el óptimo geográfico).
+
+**Patrones clave:**
+
+- **system_size_kw domina la producción** (r = 0.99 con ac_annual). La feature importance del modelo final confirma esto: 90.7% del poder predictivo viene del tamaño del sistema.
+- **Gradiente norte-sur pronunciado**: Antofagasta tiene 1.6× más irradiancia que Punta Arenas (6.26 vs 3.93 kWh/m²/día), lo que equivale a hasta 3,000 kWh/año de diferencia para el mismo sistema.
+- **tilt_deviation y azimuth_deviation** están centradas en 0° con colas de ±15° — los instaladores tienden al ángulo óptimo pero con variación suficiente para entrenar el modelo.
+- **Alta correlación entre features engineered**: `select_features()` descartó 8 de 20 columnas (p.ej. `theoretical_max_kwh` ≈ `size_x_solrad` con r = 0.99), dejando 11 features no redundantes para el modelo.
 
 ---
 
 ## Resultados del modelo
 
-Se evaluaron tres algoritmos con 5-fold cross-validation, y el mejor se tuneó con Optuna (30 trials de búsqueda bayesiana). El conjunto de entrenamiento tiene 2,400 filas y el de prueba 600.
+Se evaluaron tres algoritmos con 5-fold cross-validation, el mejor se tuneó con Optuna (30 trials) y finalmente se integró feature engineering con selección automática de features. Conjunto de entrenamiento: 2,400 filas; prueba: 600.
 
-| Modelo                     | R²         | RMSE (kWh/año) |
-|----------------------------|------------|----------------|
-| Regresión Lineal           | 0.9753     | 810.5          |
-| Random Forest              | 0.9936     | 411.1          |
-| GBM (GridSearchCV)         | 0.9984     | 204.9          |
-| **GBM (Optuna 30 trials)** | **0.9992** | **147.7**      |
+| Modelo                                       | R²         | RMSE (kWh/año) |
+|----------------------------------------------|------------|----------------|
+| Regresión Lineal (8 features base)           | 0.9753     | 810.5          |
+| Random Forest                                | 0.9936     | 411.1          |
+| GBM (GridSearchCV)                           | 0.9984     | 204.9          |
+| GBM (Optuna 30 trials)                       | 0.9992     | 147.7          |
+| Regresión Lineal (10 features engineeradas)  | 0.9960     | 326.7          |
+| **GBM + Optuna + feature engineering**       | **0.9995** | **113.4**      |
 
-El error final de 148 kWh/año equivale al ~2% de la producción típica de un sistema de 5 kWp en Santiago (7,300 kWh/año). Optuna redujo el RMSE un 28% adicional respecto al GridSearchCV.
+El error final de 113 kWh/año equivale al ~1.5% de la producción típica de un sistema de 5 kWp en Santiago. El feature engineering redujo el RMSE un 23% adicional respecto a Optuna solo.
 
 ---
 
@@ -92,27 +115,45 @@ Datos reales de irradiancia obtenidos del API de NREL (dataset internacional, me
 
 ## Stack técnico
 
-| Capa           | Herramienta            | Por qué                                                      |
-|----------------|------------------------|--------------------------------------------------------------|
-| Fuente de datos | NREL PVWatts v8 (intl) | Único API público con datos validados para Chile             |
-| Almacenamiento | SQLite                 | Zero-config, suficiente para 6 ciudades base                 |
-| ML             | scikit-learn GBM       | Mejor R² del benchmark sin overhead de deep learning         |
-| Web            | Flask                  | App sin estado, sin autenticación — no necesita más          |
-| Notebooks      | Jupyter                | Pipeline reproducible y auditable paso a paso                |
+| Capa                 | Herramienta              | Por qué                                                       |
+|----------------------|--------------------------|---------------------------------------------------------------|
+| Fuente de datos      | NREL PVWatts v8 (intl)   | Único API público con datos validados para Chile              |
+| Almacenamiento       | SQLite                   | Zero-config, suficiente para 6 ciudades base                  |
+| Feature engineering  | pandas + numpy           | 11 features físicamente motivadas + filtro CV² + correlación  |
+| ML                   | scikit-learn GBM         | Mejor R² del benchmark sin overhead de deep learning          |
+| Experiment tracking  | MLflow                   | 32 runs registrados, comparación visual de trials             |
+| Hyperparameter tuning| Optuna                   | Búsqueda bayesiana, 30 trials, mejora 23% vs GridSearchCV     |
+| Calculadora web      | Flask                    | App sin estado, sin autenticación — no necesita más           |
+| Dashboard portfolio  | Streamlit                | 4 páginas interactivas, funciona sin API key (demo mode)      |
+| Contenedores         | Docker + Compose         | Un comando para correr todo: `docker-compose up`              |
+| CI/CD                | GitHub Actions           | test + lint (ruff) + docker-build en cada push               |
+| Tests                | pytest (18 tests)        | Cobertura: datos → features → modelo → API end-to-end         |
+| Notebooks            | Jupyter                  | Pipeline reproducible y auditable paso a paso                 |
 
 ---
 
 ## Feature engineering
 
-Las dos variables más importantes del modelo capturan la desviación del instalador respecto al ángulo óptimo para el hemisferio sur:
+`create_features()` agrega 11 features físicamente motivadas al dataset base (8 columnas).
+`select_features()` filtra las 20 resultantes por CV² (baja varianza) y correlación de Pearson
+(umbral 0.95), dejando las 10 features que usa el modelo final.
 
-- **`tilt_deviation`** = tilt − |latitud|
-  Un panel en Santiago instalado a 33° (= latitud) tiene desviación cero. Cada grado de error baja la producción.
+| Feature                  | Categoría       | Justificación física                                               |
+|--------------------------|-----------------|---------------------------------------------------------------------|
+| `system_size_kw`         | Base            | Domina la producción (r=0.99 con target)                           |
+| `tilt`                   | Base            | Ángulo de inclinación del panel                                    |
+| `azimuth`                | Base            | Orientación absoluta del panel (0°=norte)                          |
+| `losses`                 | Base            | Pérdidas del sistema declaradas (%)                                |
+| `tilt_deviation`         | Orientación     | tilt − \|latitud\|: desviación del ángulo óptimo geográfico        |
+| `azimuth_deviation`      | Orientación     | Desviación de norte verdadero (0°=óptimo en hemisferio sur)        |
+| `latitude`               | Geografía       | Determina ángulo solar y recurso disponible                        |
+| `azimuth_cos_factor`     | Orientación     | cos(azimuth_deviation): pérdida continua por orientación errónea   |
+| `theoretical_max_kwh`    | Capacidad       | loss_adjusted_capacity × solrad × 365: techo físico de producción  |
+| `size_x_orientation`     | Interacción     | system_size_kw × combined_orientation_factor: tamaño × orientación |
 
-- **`azimuth_deviation`** = diferencia normalizada respecto a norte verdadero (0°)
-  En el hemisferio sur, los paneles deben mirar al norte. La desviación penaliza producción de forma asimétrica.
-
-Features del modelo: `system_size_kw`, `tilt`, `azimuth`, `losses`, `solrad_annual`, `latitude`, `tilt_deviation`, `azimuth_deviation`.
+**8 features descartadas por `select_features()`:** `solrad_annual` ↔ `latitude` (r=0.98),
+`effective_irradiance` ↔ `latitude`, `loss_adjusted_capacity` ↔ `system_size_kw` (r=0.99),
+`size_x_solrad` ↔ `theoretical_max_kwh` (r=0.99), entre otras.
 
 ---
 
@@ -129,6 +170,13 @@ La app consulta irradiancia base por ciudad en cada predicción. SQLite permite 
 
 **Flask sobre FastAPI o Django.**
 La app es una calculadora de una sola pantalla sin autenticación ni base de usuarios. Flask con dos rutas (`/` y `/output`) es todo lo que se necesita.
+
+**El primer filtro de varianza eliminaba demasiado — y en silencio.**
+La primera versión de `select_features()` usaba varianza absoluta como umbral, lo que eliminaba
+features de escala pequeña como `azimuth_cos_factor` (valores entre -1 y 1) aunque fueran
+informativamente relevantes. El segundo intento usó varianza relativa al máximo: mismo problema.
+La solución fue CV² (coeficiente de variación al cuadrado = var/mean²), invariante a la escala.
+Lección: los filtros de varianza genéricos fallan en datasets con features en escalas distintas.
 
 ---
 
@@ -157,23 +205,51 @@ pip install -r requirements.txt
 **Opción A: usar los datos ya generados (sin API key)**
 
 ```bash
-# Entrenar el modelo directamente
-jupyter nbconvert --execute notebooks/03_modeling.ipynb \
-  --to notebook --output-dir notebooks/
-
-# Levantar la app
-python app/server.py
-# → http://localhost:8080
+python src/train.py          # feature engineering + Optuna + guarda pkl
+python app/server.py         # → http://localhost:8080
 ```
 
-**Opción B: re-fetch de datos desde NREL (requiere API key gratuita)**
+**Opción B: Docker (sin instalar dependencias)**
+
+```bash
+docker-compose up            # → http://localhost:8080
+```
+
+**Opción C: re-fetch desde NREL (requiere API key gratuita)**
 
 ```bash
 # Registrarse en https://developer.nrel.gov/signup/
 python src/fetch_nrel.py --api-key TU_KEY
+# Luego: 01_eda.ipynb → 02_features.ipynb → 03_modeling.ipynb
+```
 
-# Luego seguir con los notebooks en orden:
-# 01_eda.ipynb → 02_features.ipynb → 03_modeling.ipynb
+---
+
+## Cómo correr cada componente
+
+```bash
+# Modelo: entrenar con feature engineering + Optuna
+python src/train.py
+# → guarda src/models/gb_energy_model.pkl + data/selected_features.json
+
+# Calculadora Flask
+python app/server.py
+# → http://localhost:8080
+
+# Dashboard Streamlit
+streamlit run app/streamlit_app.py
+# → http://localhost:8501
+
+# Tests (18 tests en 4 archivos)
+pytest tests/ -v
+
+# MLflow UI — ver los 32 runs registrados
+mlflow ui --port 5001
+# → http://localhost:5001
+
+# Docker
+docker-compose up
+# → Flask en :8080 + Streamlit en :8501
 ```
 
 ---
@@ -181,29 +257,49 @@ python src/fetch_nrel.py --api-key TU_KEY
 ## Estructura del proyecto
 
 ```
-SOLAR_ML/
+solar-chile/
 ├── app/
-│   ├── server.py              # Flask app — rutas / y /output
+│   ├── server.py              # Flask calculadora — rutas / y /output (puerto 8080)
+│   ├── streamlit_app.py       # Dashboard portfolio 4 páginas (puerto 8501)
 │   ├── templates/
-│   │   ├── index.html         # Formulario de entrada
-│   │   └── output.html        # Resultados (6 métricas)
+│   │   ├── index.html
+│   │   └── output.html
 │   └── static/style.css
 ├── data/
 │   ├── raw/
-│   │   ├── pvwatts_chile_baseline.csv   # Irradiancia real por ciudad
+│   │   ├── pvwatts_chile_baseline.csv   # Irradiancia real — 6 ciudades
 │   │   ├── pvwatts_chile_training.csv   # 3,000 instalaciones sintéticas
-│   │   └── nrel_chile.db                # SQLite con baseline
-│   └── processed/
-│       └── solar_chile_model.csv        # Dataset con features engineered
+│   │   └── nrel_chile.db                # SQLite baseline para inferencia
+│   ├── processed/
+│   │   ├── solar_chile_model.csv        # Dataset base (3,000 × 11)
+│   │   └── solar_chile_features.csv     # Dataset enriquecido (3,000 × 22)
+│   ├── selected_features.json           # Lista de 10 features usadas por el modelo
+│   ├── best_params.json                 # Mejores hiperparámetros Optuna
+│   └── model_results.json               # Benchmark de los 4 modelos
 ├── notebooks/
-│   ├── 01_eda.ipynb           # Exploración de recurso solar por ciudad
+│   ├── 01_eda.ipynb           # EDA baseline + dataset de entrenamiento
 │   ├── 02_features.ipynb      # Engineering de tilt/azimuth deviation
-│   └── 03_modeling.ipynb      # Benchmark y entrenamiento del modelo final
+│   └── 03_modeling.ipynb      # Benchmark GridSearchCV
 ├── src/
 │   ├── config.py              # Ciudades, coordenadas, parámetros financieros
-│   ├── fetch_nrel.py          # Cliente del API NREL PVWatts v8
-│   ├── predict.py             # Carga el modelo y calcula estimación + ROI
+│   ├── fetch_nrel.py          # Cliente NREL PVWatts v8
+│   ├── predict.py             # get_prediction() — inferencia + ROI
+│   ├── train.py               # Pipeline MLflow + Optuna (reentrenar)
+│   ├── features/
+│   │   ├── __init__.py
+│   │   └── engineering.py     # create_features() + select_features()
 │   └── models/
 │       └── gb_energy_model.pkl
-└── requirements.txt
+├── tests/
+│   ├── test_data_quality.py   # 4 tests — quality gate del dataset
+│   ├── test_features.py       # 6 tests — columnas, NaN, rangos
+│   ├── test_model.py          # 5 tests — pkl, predicción, gradiente norte-sur
+│   └── test_predict.py        # 3 tests — API end-to-end
+├── .github/
+│   └── workflows/ci.yml       # CI: test + lint (ruff) + docker-build
+├── Dockerfile                 # python:3.11-slim, expone puerto 8080
+├── docker-compose.yml         # services: web (8080) + streamlit (8501)
+├── conftest.py                # sys.path fix para pytest
+├── requirements.txt
+└── README.md
 ```

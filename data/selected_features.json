@@ -1,0 +1,12 @@
+[
+  "system_size_kw",
+  "tilt",
+  "azimuth",
+  "losses",
+  "tilt_deviation",
+  "azimuth_deviation",
+  "latitude",
+  "azimuth_cos_factor",
+  "theoretical_max_kwh",
+  "size_x_orientation"
+]

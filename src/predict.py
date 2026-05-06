@@ -6,6 +6,7 @@ Uso:
     result = get_prediction(city='Santiago', system_size_kw=5.0, tilt=33.0, azimuth=0.0)
 """
 
+import json
 import pickle
 import sqlite3
 from pathlib import Path
@@ -17,15 +18,22 @@ from src.config import (
     RATE_ESCALATION,
     INSTALL_COST_PER_KWP,
 )
+from src.features.engineering import create_features
 
-BASE_DIR = Path(__file__).parent.parent
-MODEL_PATH = BASE_DIR / "src" / "models" / "gb_energy_model.pkl"
-DB_PATH = BASE_DIR / "data" / "raw" / "nrel_chile.db"
+BASE_DIR      = Path(__file__).parent.parent
+MODEL_PATH    = BASE_DIR / "src" / "models" / "gb_energy_model.pkl"
+DB_PATH       = BASE_DIR / "data" / "raw" / "nrel_chile.db"
+FEATURES_PATH = BASE_DIR / "data" / "selected_features.json"
 
 
 def _load_model():
     with open(MODEL_PATH, "rb") as f:
         return pickle.load(f)
+
+
+def _get_selected_features() -> list[str]:
+    with open(FEATURES_PATH) as f:
+        return json.load(f)
 
 
 def _get_weather(city: str) -> dict | None:
@@ -74,7 +82,7 @@ def get_prediction(
     tilt_deviation = tilt - abs(latitude)
     azimuth_deviation = ((azimuth + 180) % 360) - 180
 
-    features = pd.DataFrame([{
+    raw = pd.DataFrame([{
         "system_size_kw":    system_size_kw,
         "tilt":              tilt,
         "azimuth":           azimuth,
@@ -84,9 +92,11 @@ def get_prediction(
         "latitude":          latitude,
         "solrad_annual":     weather["solrad_annual"],
     }])
+    features_df = create_features(raw)
+    selected = _get_selected_features()
 
     model = _load_model()
-    annual_energy_kwh = float(model.predict(features)[0])
+    annual_energy_kwh = float(model.predict(features_df[selected])[0])
 
     install_cost_clp = system_size_kw * INSTALL_COST_PER_KWP
     savings = _annual_savings(annual_energy_kwh, years=10)

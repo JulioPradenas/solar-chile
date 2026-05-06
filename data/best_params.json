@@ -1,11 +1,11 @@
 {
-  "n_estimators": 548,
+  "n_estimators": 471,
   "max_depth": 3,
-  "learning_rate": 0.08190066898905073,
-  "subsample": 0.6997369098647762,
-  "min_samples_split": 4,
-  "cv_r2_mean": 0.998947,
-  "r2": 0.99918,
-  "rmse": 147.67,
-  "mae": 106.13
+  "learning_rate": 0.08864531479016988,
+  "subsample": 0.8354933527874453,
+  "min_samples_split": 19,
+  "cv_r2_mean": 0.999502,
+  "r2": 0.999516,
+  "rmse": 113.41,
+  "mae": 78.83
 }

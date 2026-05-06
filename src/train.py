@@ -29,23 +29,30 @@ from sklearn.preprocessing import StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
+from src.features.engineering import create_features, select_features
+
 logging.basicConfig(level=logging.WARNING)
 optuna.logging.set_verbosity(optuna.logging.WARNING)
 
-DATA_PATH   = Path("data/processed/solar_chile_model.csv")
-MODEL_PATH  = Path("src/models/gb_energy_model.pkl")
-PARAMS_PATH = Path("data/best_params.json")
-EXPERIMENT  = "solar-chile"
-FEATURES    = [
-    "system_size_kw", "tilt", "azimuth", "losses",
-    "tilt_deviation", "azimuth_deviation", "latitude", "solrad_annual",
-]
-TARGET = "ac_annual"
+DATA_PATH     = Path("data/processed/solar_chile_model.csv")
+MODEL_PATH    = Path("src/models/gb_energy_model.pkl")
+PARAMS_PATH   = Path("data/best_params.json")
+FEATURES_PATH = Path("data/selected_features.json")
+EXPERIMENT    = "solar-chile"
+TARGET        = "ac_annual"
 
 
 def load_data():
     df = pd.read_csv(DATA_PATH)
-    X = df[FEATURES]
+    df_enriched = create_features(df)
+    selected, _ = select_features(
+        df_enriched,
+        exclude_cols=["city", "region", TARGET, "capacity_factor"],
+    )
+    with open(FEATURES_PATH, "w") as f:
+        json.dump(selected, f, indent=2)
+    print(f"Features seleccionadas ({len(selected)}): {selected}")
+    X = df_enriched[selected]
     y = df[TARGET]
     return train_test_split(X, y, test_size=0.2, random_state=42)
 
